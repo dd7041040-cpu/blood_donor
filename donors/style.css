@@ -1,0 +1,119 @@
+from flask import Flask, request, redirect, url_for, send_file
+from pathlib import Path
+import sqlite3
+
+app = Flask(__name__)
+BASE_DIR = Path(__file__).resolve().parent
+
+def init_db():
+    conn = sqlite3.connect(BASE_DIR / "blood_donors.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS donors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            age INTEGER NOT NULL,
+            blood_group TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT NOT NULL,
+            city TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+@app.route("/")
+def home():
+    return redirect("/donors")
+
+@app.route("/donors", methods=["GET", "POST"])
+def donors():
+    if request.method == "POST":
+        name = request.form.get("name")
+        age = request.form.get("age")
+        blood_group = request.form.get("blood_group")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        city = request.form.get("city")
+
+        if not all([name, age, blood_group, phone, email, city]):
+            return "Please fill all fields", 400
+
+        conn = sqlite3.connect(BASE_DIR / "blood_donors.db")
+        conn.execute(
+            "INSERT INTO donors (name, age, blood_group, phone, email, city) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, age, blood_group, phone, email, city)
+        )
+        conn.commit()
+        conn.close()
+
+        return redirect(url_for("success"))
+
+    return send_file(BASE_DIR / "donors" / "donors.html")
+
+@app.route("/success")
+def success():
+    return """
+    <html>
+    <head>
+        <title>Donor Registered</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; text-align: center; padding: 40px;">
+        <h2>Thank you for registering as a blood donor!</h2>
+        <p>Your data has been saved successfully.</p>
+        <a href="/donors">Back to donor page</a>
+    </body>
+    </html>
+    """
+
+@app.route("/donors/style.css")
+def donor_css():
+    return send_file(BASE_DIR / "donors" / "style.css", mimetype="text/css")
+
+@app.route("/donors/script.js")
+def donor_js():
+    return send_file(BASE_DIR / "donors" / "script.js", mimetype="application/javascript")
+
+@app.route("/donors/list")
+def donor_list():
+    conn = sqlite3.connect(BASE_DIR / "blood_donors.db")
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM donors ORDER BY id DESC").fetchall()
+    conn.close()
+
+    html = """
+    <html>
+    <head>
+        <title>Donor List</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; padding: 30px;">
+        <h2>Registered Donors</h2>
+        <table border='1' cellpadding='8' cellspacing='0'>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th>Blood Group</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>City</th>
+            </tr>
+    """
+    for row in rows:
+        html += f"""
+            <tr>
+                <td>{row['id']}</td>
+                <td>{row['name']}</td>
+                <td>{row['age']}</td>
+                <td>{row['blood_group']}</td>
+                <td>{row['phone']}</td>
+                <td>{row['email']}</td>
+                <td>{row['city']}</td>
+            </tr>
+        """
+    html += "</table></body></html>"
+    return html
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
