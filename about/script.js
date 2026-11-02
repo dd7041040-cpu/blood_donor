@@ -1,110 +1,87 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>About | Blood Donor</title>
-  <link rel="stylesheet" href="style.css" />
-</head>
-<body>
-  <header class="site-header">
-    <nav class="navbar container">
-      <div class="logo">Blood Donor</div>
-      <div class="nav-links">
-        <a href="../home/index.html">Home</a>
-        <a href="about.html" class="active">About</a>
-        <a href="../register/register.html">Register</a>
-      </div>
-    </nav>
-  </header>
+from flask import Flask, request, redirect, url_for, send_from_directory
+from pathlib import Path
+import sqlite3
 
-  <main>
-    <section class="hero">
-      <div class="container hero-content">
-        <div class="hero-text">
-          <p class="eyebrow">Save a Life Today</p>
-          <h1>Give Blood, Give Hope.</h1>
-          <p>
-            Every donation can help a patient in need. Blood donation is a simple act
-            with a powerful impact on families, hospitals, and communities.
-          </p>
-          <a href="../register/register.html" class="btn primary">Become a Donor</a>
-        </div>
-        <div class="hero-card">
-          <h3>Why Donate?</h3>
-          <ul>
-            <li>Helps patients in emergencies</li>
-            <li>Supports surgeries and treatments</li>
-            <li>Strengthens the local blood supply</li>
-            <li>Creates a healthier community</li>
-          </ul>
-        </div>
-      </div>
-    </section>
+app = Flask(__name__, static_url_path="", static_folder=".")
 
-    <section class="info container">
-      <div class="section-heading">
-        <p class="eyebrow">Our Mission</p>
-        <h2>Connecting caring people with patients in need</h2>
-      </div>
+BASE_DIR = Path(__file__).resolve().parent
 
-      <div class="grid">
-        <div class="card">
-          <h3>Who We Are</h3>
-          <p>
-            We are a community-driven blood donation platform that helps people register,
-            donate, and spread awareness about the importance of blood donation.
-          </p>
-        </div>
+def init_db():
+    conn = sqlite3.connect(BASE_DIR / "donors.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS donors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            age INTEGER NOT NULL,
+            blood_group TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT NOT NULL,
+            city TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.close()
 
-        <div class="card">
-          <h3>How It Helps</h3>
-          <p>
-            Our platform makes it easier for donors to get involved and helps hospitals
-            and clinics access a reliable blood supply when it matters most.
-          </p>
-        </div>
+@app.route("/")
+def index():
+    return send_from_directory(str(BASE_DIR / "home"), "index.html")
 
-        <div class="card">
-          <h3>Our Values</h3>
-          <p>
-            Compassion, trust, safety, and service guide everything we do. Every donation
-            is a step toward a healthier and more hopeful tomorrow.
-          </p>
-        </div>
-      </div>
-    </section>
+@app.route("/about")
+def about():
+    return send_from_directory(str(BASE_DIR / "about"), "about.html")
 
-    <section class="stats">
-      <div class="container stats-grid">
-        <div>
-          <h3>5k+</h3>
-          <p>Registered Donors</p>
-        </div>
-        <div>
-          <h3>20k+</h3>
-          <p>Units Donated</p>
-        </div>
-        <div>
-          <h3>100%</h3>
-          <p>Community Driven</p>
-        </div>
-      </div>
-    </section>
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        name = request.form.get("name")
+        age = request.form.get("age")
+        blood_group = request.form.get("blood_group")
+        phone = request.form.get("phone")
+        email = request.form.get("email")
+        city = request.form.get("city")
 
-    <section class="cta container">
-      <h2>Join the blood donation movement</h2>
-      <p>Your donation can save multiple lives.</p>
-      <a href="../register/register.html" class="btn primary">Register Now</a>
-    </section>
-  </main>
+        if not all([name, age, blood_group, phone, email, city]):
+            return "Please fill all fields", 400
 
-  <footer class="site-footer">
-    <div class="container">
-      <p>© 2026 Blood Donor Project</p>
-    </div>
-  </footer>
+        conn = sqlite3.connect(BASE_DIR / "donors.db")
+        conn.execute(
+            "INSERT INTO donors (name, age, blood_group, phone, email, city) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, age, blood_group, phone, email, city)
+        )
+        conn.commit()
+        conn.close()
 
-  <script src="script.js"></script>
-</body>
-</html>
+        return redirect(url_for("success"))
+
+    return send_from_directory(str(BASE_DIR / "register"), "register.html")
+
+@app.route("/success")
+def success():
+    return """
+    <html>
+      <head><title>Registration Successful</title></head>
+      <body style="font-family: Arial; padding: 40px; text-align:center;">
+        <h2>Thank you for registering as a blood donor!</h2>
+        <p>Your information has been saved successfully.</p>
+        <a href="/register">Register another donor</a>
+      </body>
+    </html>
+    """
+
+@app.route("/donors")
+def donors():
+    conn = sqlite3.connect(BASE_DIR / "donors.db")
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute("SELECT * FROM donors ORDER BY id DESC").fetchall()
+    conn.close()
+
+    html = "<h2>Registered Donors</h2><table border='1' cellpadding='10'>"
+    html += "<tr><th>ID</th><th>Name</th><th>Age</th><th>Blood Group</th><th>Phone</th><th>Email</th><th>City</th></tr>"
+    for row in rows:
+        html += f"<tr><td>{row['id']}</td><td>{row['name']}</td><td>{row['age']}</td><td>{row['blood_group']}</td><td>{row['phone']}</td><td>{row['email']}</td><td>{row['city']}</td></tr>"
+    html += "</table>"
+    return html
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True)
